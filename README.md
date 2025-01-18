@@ -1,4 +1,8 @@
-## BGLR for the Julia Language
+# BGLR
+
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://jeffersonfparil.github.io/BGLR.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://jeffersonfparil.github.io/BGLR.jl/dev/)
+[![Build Status](https://github.com/jeffersonfparil/BGLR.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/jeffersonfparil/BGLR.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
 The BGLR Julia package implements **Bayesian shrinkage and variable selection methods for high-dimensional regressions**.
 
@@ -15,12 +19,47 @@ Authors:  Gustavo de los Campos (gustavoc@msu.edu) and Paulino Perez-Rodriguez (
 - [BGLR-R Publication](http://www.genetics.org/content/early/2014/07/06/genetics.114.164442)
 
 
-#### Installing BGLR-Julia
+## Installation
 
-```Julia
+<!-- ```Julia
   Pkg.rm("BGLR")
   Pkg.clone("https://github.com/gdlc/BGLR.jl")
+``` -->
+
+```julia
+using Pkg
+Pkg.add("https://github.com/jeffersonfparil/BGLR.jl")
 ```
+
+## Tests
+
+```julia
+n = 100
+p = 10_000
+X = rand(n, p)
+y = rand(n)
+
+ETA = Dict("mrk"=>BRR(X))
+fm = bglr(y=y,ETA=ETA)
+
+## Retrieving estimates and predictions
+fm.varE # posterior mean of error variance
+fm.yHat # predictions
+fm.ETA["mrk"].var # variance of the random effect associated to markers
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
 
 #### Data sets
 

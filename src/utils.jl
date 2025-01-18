@@ -1,4 +1,4 @@
-#=
+"""
  Bed format,
   
  http://pngu.mgh.harvard.edu/~purcell/plink/binary.shtml
@@ -21,11 +21,11 @@
  
  Example:
 
- $xxd sample.bed
+ \$xxd sample.bed
  
  0000000: 6c1b 01fa ff57 bfab ffff effe bffe ffff  l....W..........
  
- $xxd -b sample.bed
+ \$xxd -b sample.bed
  
  0000000: 01101100 00011011 00000001 11111010 11111111 01010111  l....W
 
@@ -69,14 +69,11 @@ Recode snp to 0,1,2 Format using allele "1" as reference
 2 --> NA
 3 --> 2
 
-=#
-
 
 #FIXME:
 #This is a preeliminary version, it is not memory efficient
 #check also coding for missing values
 
-"""
 read_bed(bed_file::String,n::Int64,p::Int64)
 Function that reads genotype information stored in binary BED files used in plink. 
 
@@ -91,48 +88,47 @@ Function that reads genotype information stored in binary BED files used in plin
 * A matrix with the genotypic information.
 
 """
+function read_bed(bed_file::String, n::Int64, p::Int64)
 
-function read_bed(bed_file::String,n::Int64,p::Int64)
+    s = open(bed_file)
+    read(s, UInt8) == 0x6c && read(s, UInt8) == 0x1b || error("Unknown file format")
+    read(s, UInt8) == 1 || error("Only snp and individual major order are supported")
+    m = div(n + 3, 4)
+    bb = Mmap.mmap(s, Array{UInt8,2}, (m, p))
+    close(s)
 
-	s = open(bed_file)
-	read(s,UInt8) == 0x6c && read(s,UInt8) == 0x1b || error("Unknown file format")
-	read(s,UInt8) == 1 || error("Only snp and individual major order are supported")
-	m = div(n+3,4)
-	bb=Mmap.mmap(s,Array{UInt8,2},(m,p))
-	close(s)
-	
-	mask=0x03
-	recode = [0,2,1,3]
+    mask = 0x03
+    recode = [0, 2, 1, 3]
 
-	X=zeros(n*p)
+    X = zeros(n * p)
 
-	#Loop over snps
-	for j in 0:(p-1)
-    		l=-1
-    		buffer=bb[:,(j+1)]
-    	
-    		#loop over individuals
-    		for i in 0:(m-1)
-    			c=buffer[(i+1)]
-    			for k in 0:3
-    				l=l+1
-    				code = c & mask
-    				c=c>>2;  #Right shift (two bits)
-    		
-    				#Some pieces of information are meaningless if the number of individuals IS NOT a multiple of 4
-            			#at the end of the snp
-            
-            			if(l<n)    
-            				#Add one because in julia we begin counting in 1
-                			X[(l+(j*n))+1]=recode[1+code]
-            			end                          
-    			end
-    		end
-	end
-	
-	X=reshape(X,(n,p))
+    #Loop over snps
+    for j = 0:(p-1)
+        l = -1
+        buffer = bb[:, (j+1)]
 
-	return(X)
+        #loop over individuals
+        for i = 0:(m-1)
+            c = buffer[(i+1)]
+            for k = 0:3
+                l = l + 1
+                code = c & mask
+                c = c >> 2  #Right shift (two bits)
+
+                #Some pieces of information are meaningless if the number of individuals IS NOT a multiple of 4
+                #at the end of the snp
+
+                if (l < n)
+                    #Add one because in julia we begin counting in 1
+                    X[(l+(j*n))+1] = recode[1+code]
+                end
+            end
+        end
+    end
+
+    X = reshape(X, (n, p))
+
+    return (X)
 end
 
 #Testing
@@ -158,78 +154,78 @@ Function that creates a design (or model) matrix, by expanding factors to a set 
 * The design matrix.
 
 """
+function model_matrix(x; intercept = true)
+    levels = sort(unique(x))
+    n = size(x)[1]
+    p = size(levels)[1]
 
-function model_matrix(x;intercept=true)
-        levels=sort(unique(x))
-        n=size(x)[1]
-        p=size(levels)[1]
+    if (p < 2)
+        error("The factor should have at least 2 levels")
+    end
 
-        if(p<2)
-                error("The factor should have at least 2 levels")
+    X = zeros(n, p)
+
+    if (intercept)
+        X[:, 1] = 1
+        for j = 2:p
+            index = (x .== levels[j])
+            X[index, j] = 1
         end
-
-        X=zeros(n,p)
-
-	if(intercept)
-		X[:,1]=1
-        	for j in 2:p
-                	index=(x.==levels[j])
-                	X[index,j]=1
-        	end
-	else
-		for j in 1:p
-			index=(x.==levels[j])
-			X[index,j]=1
-		end
-	end
-        X
+    else
+        for j = 1:p
+            index = (x .== levels[j])
+            X[index, j] = 1
+        end
+    end
+    X
 end
 
+"""
 ##########################################################################################
 #This routine appends a textline to
 #to a file
-
+"""
 function writeln(con, x, delim)
- n=length(x)
- if n>1
-   for i in 1:(n-1)
-     write(con,string(x[i],delim))
-   end
-   write(con,string(x[n]))
- else
-    write(con,string(x[1]))
- end
- write(con,"\n")
- flush(con)
+    n = length(x)
+    if n > 1
+        for i = 1:(n-1)
+            write(con, string(x[i], delim))
+        end
+        write(con, string(x[n]))
+    else
+        write(con, string(x[1]))
+    end
+    write(con, "\n")
+    flush(con)
 end
 
 ##########################################################################################
 #function to get the levels of a factor
 function levels(x::Array{Int64,1})
-        sort(unique(x))
+    sort(unique(x))
 end
 
 ##########################################################################################
 #function to get the number of levels of a factor
 function nlevels(x::Array{Int64,1})
-        size(levels(x))[1]
+    size(levels(x))[1]
 end
 
 ##########################################################################################
 function renumber(x)
-     counts=table(x)
-     levels=counts[1]
-     nLevels=size(counts[1])[1]
-     n=size(x)[1]
-     z=int(zeros(n))
-     for i in 1:n
-        for j in 1:nLevels
-           if x[i]==levels[j]
-              z[i]=j
-           end
-        end 
-     end
-     return z
+    counts = table(x)
+    levels = counts[1]
+    nLevels = size(counts[1])[1]
+    n = size(x)[1]
+    z = int(zeros(n))
+    for i = 1:n
+        for j = 1:nLevels
+            if x[i] == levels[j]
+                z[i] = j
+            end
+        end
+    end
+    return z
 end
 ##########################################################################################
 
@@ -249,30 +245,31 @@ replicates the values in x.
 * An object of the same type as x.
 
 """
+function rep(x; each = 0, times = 0)
 
-function rep(x;each=0,times=0)
+    tmp = ((each > 0) & (times <= 0)) | ((each <= 0) & (times > 0))
+    @assert tmp "One and only one of {'each'} or 'times' must be positive"
 
-        tmp=((each>0)&(times<=0))|((each<=0)&(times>0))
-        @assert  tmp "One and only one of \{'each'} or 'times' must be positive"
+    nX = length(x)
 
-        nX=length(x)
-
-        if(times>0)
-                nZ=nX*times
-                z=Array(typeof(x[1]),nZ)
-                for i in 1:times
-                        z[((i-1)*nX+1):(i*nX)]=x
-                end
-        else
-                nZ=nX*each
-                z=Array(typeof(x[1]),nZ)
-                for i in 1:length(x)
-                        z[((i-1)*each+1):(i*each)]=x[i]
-
-                end
+    if (times > 0)
+        nZ = nX * times
+        # z=Array(typeof(x[1]),nZ)
+        z = ones(nZ)
+        for i = 1:times
+            z[((i-1)*nX+1):(i*nX)] .= x
         end
+    else
+        nZ = nX * each
+        # z=Array(typeof(x[1]),nZ)
+        z = ones(nZ)
+        for i = 1:length(x)
+            z[((i-1)*each+1):(i*each)] .= x[i]
 
-        return z
+        end
+    end
+
+    return z
 end
 
 ##########################################################################################
@@ -282,25 +279,25 @@ end
 #The second component of the output corresponds to the actual counts
 
 function table(x::Array{Int64})
-   n=length(x)
-   counts=cell(2)
-   labels=sort(unique(x))
-   counts[1]=labels
-   nGroups=length(labels)
-   counts[2]=fill(0,nGroups)
-   for i in 1:nGroups
-         for j in 1:n
-            counts[2][i]=counts[2][i]+ifelse(x[j]==labels[i],1,0)
-         end
-   end
-   return counts
+    n = length(x)
+    counts = cell(2)
+    labels = sort(unique(x))
+    counts[1] = labels
+    nGroups = length(labels)
+    counts[2] = fill(0, nGroups)
+    for i = 1:nGroups
+        for j = 1:n
+            counts[2][i] = counts[2][i] + ifelse(x[j] == labels[i], 1, 0)
+        end
+    end
+    return counts
 end
 
 ##########################################################################################
 #Function to compute the sum of squares of the entries of a vector
 
-function sumsq(x::Vector{Float64});
-        return(sum(x.^2))
+function sumsq(x::Vector{Float64})
+    return (sum(x .^ 2))
 end
 
 ##########################################################################################
@@ -308,50 +305,50 @@ end
 #Sum of squares by column and by groups
 #It takes as argument a matrix
 function sumsq_group(X::Array{Float64,2}, groups::Array{Int64,1})
-        lev=levels(groups)
-        nGroups=size(lev)[1]
-        p=size(X)[2]
-        x2=zeros(nGroups,p)
+    lev = levels(groups)
+    nGroups = size(lev)[1]
+    p = size(X)[2]
+    x2 = zeros(nGroups, p)
 
-        for k in 1:nGroups
-                #Temporary matrix with the rows that
-                #belong to group_k
-                tmp=X[groups.==lev[k],:]
-                for j in 1:p
-                        x2[k,j]=sum(tmp[:,j].^2)
-                end
+    for k = 1:nGroups
+        #Temporary matrix with the rows that
+        #belong to group_k
+        tmp = X[groups.==lev[k], :]
+        for j = 1:p
+            x2[k, j] = sum(tmp[:, j] .^ 2)
         end
+    end
 
-        return(x2)
+    return (x2)
 end
 
 ##########################################################################################
 
-function innersimd(x, y,n)
+function innersimd(x, y, n)
     s = 0.0
-    @simd for i=1:n
-        @inbounds s += x[i]*y[i]
+    @simd for i = 1:n
+        @inbounds s += x[i] * y[i]
     end
     s
 end
 
 ##########################################################################################
 
-function my_axpy!(a,x,y,n)
-    @simd for i=1:n
-        @inbounds y[i]=a*x[i]+y[i]
+function my_axpy!(a, x, y, n)
+    @simd for i = 1:n
+        @inbounds y[i] = a * x[i] + y[i]
     end
 end
 
 ##########################################################################################
 
-function scale(X::Array{Float64,2};center=true,scale=true)
-    n,p=size(X)
-    for j in 1:p
-        xj=X[:,j]
-        mu=mean(xj)
-        SD=std(xj)
-        X[:,j]=(xj-mu)/SD
+function scale(X::Array{Float64,2}; center = true, scale = true)
+    n, p = size(X)
+    for j = 1:p
+        xj = X[:, j]
+        mu = mean(xj)
+        SD = std(xj)
+        X[:, j] = (xj - mu) / SD
     end
-        X
+    X
 end
